@@ -2,46 +2,55 @@
 import bcrypt from "bcrypt";
 import { User } from "../models/user.js";
 import { setcookie } from "../utils/features.js";
+import ErrorHandeler from "../middleware/error.js";
 
+
+ 
 export const alluser=async (req,res)=>{
-
+try {
+    
     const users= await User.find({}) 
 res.json({
     success:true,
     users:users,
 })
+} catch (error) {
+    next(error)
+}
 }
 
 
-export const register=async (req,res)=>{
+export const register=async (req,res,next)=>{
+  try {
     const {name,email,password}=req.body
     // console.log(name,password)
     let user=await User.findOne({email})
-    if(user) return res.status(404).json({
-        success:false,massage:"User Already Exist"
-    })
+    if(user) return  next(new ErrorHandeler("User Already Exits",404))
     const hashedpassword= await bcrypt.hash(password,10)
      user= await User.create({name,email,password:hashedpassword});
     setcookie(user,res,201,"Registered Successfully")
+  } catch (error) {
+    next(error)
+  }
 };
 
 
 
 export const login= async (req,res,next)=>{
-    const {email,password}=req.body
+    try {
+        const {email,password}=req.body
 
     const user=await User.findOne({email}).select("+password")
-    if(!user) return res.status(404).json({
-        success:false,massage:"Invalid Email or Password"
-    })
+    if(!user) return  next(new ErrorHandeler("Invalid Email or Password",404))
 
     // const hashedpass= await bcrypt.hash(password,10);
     const is_match= await bcrypt.compare(password,user.password)
-    if(!is_match) return res.status(404).json({
-        success:false,massage:"Invalid Email or Password"
-    })
+    if(!is_match) return  next(new ErrorHandeler("Invalid Password",404))
 
     setcookie(user,res,200,`Welcome,${user.name}`);
+    } catch (error) {
+        next(error)
+    }
 }
 
 
@@ -64,7 +73,13 @@ export const getOneUser= (req,res)=>{
     export const logout= (req,res)=>{
     
 
-        res.status(200).cookie("tokken","",{expires:new Date(Date.now())}).json({
+        res
+        .status(200).cookie("tokken","",{
+            expires:new Date(Date.now()),        
+            SameSite:process.env.NODE_ENV==="Development"?"lex":"none",
+            secure:process.env.NODE_ENV==="Development"?false:true,
+        })
+        .json({
             success:true,
             massage:"Logout Successfully",
         })
